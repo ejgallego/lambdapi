@@ -166,3 +166,14 @@ else
 	install -m 644 editors/vim/ftdetect/dedukti.vim $(VIMDIR)/ftdetect
 	@echo -e "\e[36mVim mode installed.\e[39m"
 endif
+
+OPAM_REPO=/home/egallego/external/coq/opam-deducteam
+opam_release:
+	rm -rf _build
+	topkg distrib
+	topkg publish distrib
+	topkg opam pkg -n lambdapi
+	topkg opam pkg -n lambdapi-lsp
+	cp -a _build/lambdapi.$(shell topkg log -t) $(OPAM_REPO)/packages/lambdapi/
+	cp -a _build/lambdapi-lsp.$(shell topkg log -t) $(OPAM_REPO)/packages/lambdapi-lsp/
+	cd $(OPAM_REPO) && git add -A && git commit -a -m "[lambdapi] new version"
