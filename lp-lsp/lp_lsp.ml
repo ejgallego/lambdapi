@@ -52,6 +52,12 @@ let do_change ofmt params =
   Lp_doc.new_doc doc_file;
   List.iter (do_change ofmt doc_file doc_ver) changes
 
+
+let do_shutdown ofmt =
+  let msg = LSP.mk_reply [] in
+  LIO.send_json ofmt msg
+
+
 let dispatch_method ofmt dict =
   let params = dict_field "params" dict in
   match string_field "method" dict with
@@ -63,11 +69,12 @@ let dispatch_method ofmt dict =
     do_change ofmt params
   | "textDocument/didClose" ->
     do_close ofmt params
+  | "shutdown" ->
+    do_shutdown ofmt
+  | "exit" -> exit 0;
   (* NOOPs *)
   | "initialized"
   | "workspace/didChangeWatchedFiles"
-  | "shutdown"
-  | "exit" -> ()
   | msg ->
     LIO.log_error "no_handler" msg
 
