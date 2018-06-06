@@ -19,6 +19,8 @@ let parse_uri str =
 
 let mk_reply   r = `Assoc [ "jsonrpc", `String "2.0"; "id", `Int 0;        "result", `Assoc r ]
 let mk_event m p = `Assoc [ "jsonrpc", `String "2.0"; "method", `String m; "params", `Assoc p ]
+let mk_reply_null m = `Assoc [ "jsonrpc", `String "2.0"; "id", `Int 1; "result", `String m;]
+
 
 let mk_diagnostic ((p : Pos.pos), (lvl : int), (msg : string)) : J.json =
   let open Pos in
