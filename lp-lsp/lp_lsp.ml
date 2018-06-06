@@ -57,7 +57,7 @@ let do_change ofmt params =
 let do_close _ofmt _params = ()
 
 let do_shutdown ofmt =
-  let msg = LSP.mk_reply [] in
+  let msg = LSP.mk_reply_null "" in
   LIO.send_json ofmt msg
 
 let dispatch_method ofmt dict =
