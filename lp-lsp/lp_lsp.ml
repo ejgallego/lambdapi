@@ -19,6 +19,10 @@ let   dict_field name dict = U.to_assoc  List.(assoc name dict)
 let   list_field name dict = U.to_list   List.(assoc name dict)
 let string_field name dict = U.to_string List.(assoc name dict)
 
+(* Conditionals *)
+let option_default x d = match x with | None -> d | Some x -> x
+let odict_field name dict = option_default U.(to_option to_assoc List.(assoc name dict)) []
+
 module LIO = Lsp_io
 module LSP = Lsp_base
 
@@ -41,8 +45,6 @@ let do_open ofmt params =
   Lp_doc.new_doc doc_file;
   List.iter (do_change ofmt doc_file doc_ver) changes
 
-let do_close _ofmt _params = ()
-
 let do_change ofmt params =
   let document = dict_field "textDocument" params in
   let doc_file, doc_ver  = LSP.parse_uri @@ string_field "uri" document, int_field "version" document in
@@ -52,14 +54,14 @@ let do_change ofmt params =
   Lp_doc.new_doc doc_file;
   List.iter (do_change ofmt doc_file doc_ver) changes
 
+let do_close _ofmt _params = ()
 
 let do_shutdown ofmt =
   let msg = LSP.mk_reply [] in
   LIO.send_json ofmt msg
 
-
 let dispatch_method ofmt dict =
-  let params = dict_field "params" dict in
+  let params = odict_field "params" dict in
   match string_field "method" dict with
   | "initialize" ->
     do_initialize ofmt params
@@ -71,10 +73,12 @@ let dispatch_method ofmt dict =
     do_close ofmt params
   | "shutdown" ->
     do_shutdown ofmt
-  | "exit" -> exit 0;
+  | "exit" ->
+    exit 0
   (* NOOPs *)
   | "initialized"
-  | "workspace/didChangeWatchedFiles"
+  | "workspace/didChangeWatchedFiles" ->
+    ()
   | msg ->
     LIO.log_error "no_handler" msg
 

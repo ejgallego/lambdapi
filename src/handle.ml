@@ -25,7 +25,7 @@ let handle_symdecl : bool -> strloc -> term -> unit =
     (* We check that [a] is typable by a sort. *)
     ignore (Solve.sort_type Ctxt.empty a);
     (*FIXME: check that [a] contains no uninstantiated metavariables.*)
-    ignore (Sign.new_symbol sign definable x a)
+    ignore (Sign.add_symbol sign definable x a)
 
 (** [handle_rule r] checks that the rule [r] preserves typing, while
     adding it to the corresponding symbol. The program fails
@@ -37,8 +37,8 @@ let handle_rule : sym * rule -> unit = fun (s,r) ->
   Sr.check_rule (s, r);
   Sign.add_rule (current_sign()) s r
 
-(** [handle_sym_def opaque x ao t] checks that [t] is of type [a] if
-    [ao = Some a]. Then, it does the same as [handle_sym_decl (not
+(** [handle_symdef opaque x ao t] checks that [t] is of type [a] if
+    [ao = Some a]. Then, it does the same as [handle_symdecl (not
     definable) x ao]. Moreover, it adds the rule [x --> t] if [not
     opaque]. In case of error, the program fails gracefully. *)
 let handle_symdef : bool -> strloc -> term option -> term -> unit
@@ -63,7 +63,7 @@ let handle_symdef : bool -> strloc -> term option -> term -> unit
        | None    -> fatal "Cannot infer the type of [%a]." pp t
   in
   (*FIXME: check that [t] and [a] have no uninstantiated metas.*)
-  let s = Sign.new_symbol sign Parser.definable x a in
+  let s = Sign.add_symbol sign Parser.definable x a in
   if not opaque then s.sym_def := Some(t)
 
 (** [handle_infer t] attempts to infer the type of [t]. In case
@@ -115,7 +115,7 @@ let handle_start_proof (s:strloc) (a:term) : unit =
   (* We check that [a] is typable by a sort. *)
   ignore (Solve.sort_type Ctxt.empty a);
   (* We start the proof mode. *)
-  let m = add_meta s.elt a 0 in
+  let m = add_user_meta s.elt a 0 in
   let g =
     { g_meta = m
     ; g_hyps = []
@@ -173,35 +173,30 @@ let rec handle_require : Files.module_path -> unit = fun path ->
 and handle_cmd : Parser.p_cmd loc -> unit = fun cmd ->
   let cmd = Scope.scope_cmd cmd in
   try
-    match cmd.elt with
-    | SymDecl(b,n,a)  -> handle_symdecl b n a
-    | Rules(rs)       -> List.iter handle_rule rs
-    | SymDef(b,n,a,t) -> handle_symdef b n a t
-    | Require(path)   -> handle_require path
-    | Debug(v,s)      -> set_debug v s
-    | Verb(n)         -> verbose := n
-    | Infer(t,c)      -> handle_infer t c
-    | Eval(t,c)       -> handle_eval t c
-    | Test(test)      -> handle_test test
-    | StartProof(s,a) -> handle_start_proof s a
-    | PrintFocus      -> handle_print_focus()
-    | Refine(t)       -> handle_refine t
-    (* Legacy commands. *)
-    | Other(c)        -> if !debug then wrn "Unknown command %S at %a.\n"
-                           c.elt Pos.print c.pos
+    begin
+      match cmd.elt with
+      | SymDecl(b,n,a)  -> handle_symdecl b n a
+      | Rules(rs)       -> List.iter handle_rule rs
+      | SymDef(b,n,a,t) -> handle_symdef b n a t
+      | Require(path)   -> handle_require path
+      | Debug(v,s)      -> set_debug v s
+      | Verb(n)         -> verbose := n
+      | Infer(t,c)      -> handle_infer t c
+      | Eval(t,c)       -> handle_eval t c
+      | Test(test)      -> handle_test test
+      | StartProof(s,a) -> handle_start_proof s a
+      | PrintFocus      -> handle_print_focus()
+      | Refine(t)       -> handle_refine t
+      (* Legacy commands. *)
+      | Other(c)        -> if !debug then wrn "Unknown command %S at %a.\n"
+                             c.elt Pos.print c.pos
+    end;
+    if !debug_unif then log "unif" "after the command: %a" print_meta_stats ()
   with
   | Fatal(m) -> fatal "[%a] error while handling a command.\n%s\n"
                   Pos.print cmd.pos m
   | e        -> let e = Printexc.to_string e in
                 fatal "[%a] uncaught exception [%s].\n" Pos.print cmd.pos e
-
-(** [handle_cmds cmds] interprets the commands of [cmds] in order. The
-    program fails gracefully in case of error. *)
-and handle_cmds : Parser.p_cmd loc list -> unit = fun cmds ->
-  let handle_cmd cmd =
-    try handle_cmd cmd with Fatal(msg) -> abort "%s" msg
-  in
-  List.iter handle_cmd cmds
 
 (** [compile force path] compiles the file corresponding to [path],
     when it is necessary (the corresponding object file does not
@@ -212,13 +207,13 @@ and compile : bool -> Files.module_path -> unit =
   let base = String.concat "/" path in
   let src = base ^ Files.src_extension in
   let obj = base ^ Files.obj_extension in
-  if not (Sys.file_exists src) then abort "File [%s] not found.\n" src;
+  if not (Sys.file_exists src) then fatal "File [%s] not found.\n" src;
   if List.mem path !loading then
     begin
       err "Circular dependencies detected in [%s].\n" src;
       err "Dependency stack for module [%a]:\n" Files.pp_path path;
       List.iter (err "  - [%a]\n" Files.pp_path) !loading;
-      abort "Build aborted.\n"
+      fatal "Build aborted.\n"
     end;
   if PathMap.mem path !loaded then
     out 2 "Already loaded [%s]\n%!" src
@@ -229,7 +224,7 @@ and compile : bool -> Files.module_path -> unit =
       loading := path :: !loading;
       let sign = Sign.create path in
       loaded := PathMap.add path sign !loaded;
-      handle_cmds (try Parser.parse_file src with Fatal(_) -> exit 1);
+      List.iter handle_cmd (Parser.parse_file src);
       if !gen_obj then Sign.write sign obj;
       loading := List.tl !loading;
       out 1 "Checked [%s]\n%!" src;

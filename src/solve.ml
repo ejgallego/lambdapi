@@ -68,12 +68,12 @@ let eq_vari : term -> term -> bool = fun t u ->
     is [Type]. *)
 let make_type =
   let empty = [||] in
-  fun () -> Meta(new_meta Type 0, empty)
+  fun () -> Meta(add_sys_meta Type 0, empty)
 
 (** [make_meta ctx a] creates a metavariable of type [a],  whth an environment
     containing the variables of context [ctx]. *)
 let make_meta : Ctxt.t -> term -> term = fun ctx a ->
-  let m = new_meta (Ctxt.to_prod ctx a) (List.length ctx) in
+  let m = add_sys_meta (Ctxt.to_prod ctx a) (List.length ctx) in
   let vs = List.rev_map (fun (v,_) -> Vari v) ctx in
   Meta(m, Array.of_list vs)
 
@@ -107,16 +107,16 @@ let set_meta : meta -> (term, term) Bindlib.mbinder -> unit = fun m v ->
   if !debug_unif then
     begin
       let (xs,v) = Bindlib.unmbind v in
-      log "set_meta" "%a[%a] ← %a" pp_meta m (Array.pp pp_tvar ",") xs pp v
+      log "unif" "setting %a[%a] ← %a" pp_meta m (Array.pp pp_tvar ",") xs pp v
     end;
   begin
     match m.meta_name with
-    | Defined(s)  -> let str_map = StrMap.remove s !all_metas.str_map in
-                     all_metas := {!all_metas with str_map}
-    | Internal(i) -> let int_map = IntMap.remove i !all_metas.int_map in
-                     all_metas := {!all_metas with int_map}
+    | User(s)  -> let str_map = StrMap.remove s !all_metas.str_map in
+                  all_metas := {!all_metas with str_map}
+    | Sys(i) -> let int_map = IntMap.remove i !all_metas.int_map in
+                all_metas := {!all_metas with int_map}
   end;
-  m.meta_type := Kind;
+  m.meta_type  := Kind;
   m.meta_value := Some(v)
 
 (** Boolean saying whether user metavariables can be set or not. *)
@@ -262,7 +262,7 @@ and solve_unif c t1 t2 strats p : unif list =
   if t1 == t2 then solve_unifs strats p
   else
     begin
-      if !debug_unif then log "solve_unif" "[%a] [%a]" pp t1 pp t2;
+      if !debug_unif then log "unif" "solving [%a] ~ [%a]" pp t1 pp t2;
       match unfold t1, unfold t2 with
       | Type, Type
       | Kind, Kind -> solve (S_Unif::strats) p
