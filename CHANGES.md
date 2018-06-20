@@ -1,3 +1,7 @@
+0.0.7
+-----
+- Send structured goals in diagnostics.
+
 0.0.6
 -----
 - Tweaked changelog.
