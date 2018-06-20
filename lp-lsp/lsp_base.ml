@@ -20,7 +20,7 @@ let parse_uri str =
 let mk_reply ~id r = `Assoc [ "jsonrpc", `String "2.0"; "id",     `Int id;   "result", `Assoc r ]
 let mk_event m p   = `Assoc [ "jsonrpc", `String "2.0"; "method", `String m; "params", `Assoc p ]
 
-let mk_diagnostic ((p : Pos.pos), (lvl : int), (msg : string)) : J.json =
+let mk_diagnostic ((p : Pos.pos), (lvl : int), (msg : string), goal) : J.json =
   let open Pos in
   let range =
     let line1 = Input.line_num p.start_buf in
@@ -32,7 +32,8 @@ let mk_diagnostic ((p : Pos.pos), (lvl : int), (msg : string)) : J.json =
   in
   `Assoc ["range", range;
           "severity", `Int lvl;
-          "message",  `String msg]
+          "message",  `String msg;
+          "goal_fg", goal]
 
 let mk_diagnostics file version ld : J.json =
   mk_event "textDocument/publishDiagnostics"
