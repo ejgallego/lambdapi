@@ -28,18 +28,27 @@ type doc = {
 }
 
 let mk_error file version pos msg =
-  LSP.mk_diagnostics file version [pos, 1, msg]
+  LSP.mk_diagnostics file version [pos, 1, msg, `Null]
 
 let parse_text contents =
   let open Earley in
   parse_string Parser.cmd_list Parser.blank contents
 
 (* XXX: Imperative problem *)
-let get_goals pos =
+let json_of_goal g =
+  let open Yojson.Basic in
+  let pr_hyp (s,(_,t)) =
+    `String (Format.asprintf "%s : %a" s Print.pp_term (Bindlib.unbox t)) in
+  let j_env = List.map pr_hyp g.Proofs.g_hyps in
+  `Assoc ["hyps", `List j_env;
+          "type", `String (Format.asprintf "%a" Print.pp_term g.Proofs.g_type)]
+
+let json_of_goal () =
   match !Proofs.theorem with
-  | None -> []
+  | None ->
+    `Null
   | Some thm ->
-    [pos, 2, Format.asprintf "@[%a@]" Print.pp_goal thm.t_focus]
+    json_of_goal thm.t_focus
 
 let process_cmd _file (st,dg) node =
   let open Pos  in
@@ -49,11 +58,10 @@ let process_cmd _file (st,dg) node =
    * Console.err_fmt := lp_fmt; *)
   match handle_command st node with
   | OK st ->
-    let ok_diag = node.pos, 4, "OK" in
-    let pf_diag = get_goals node.pos in
-    st, pf_diag @ ok_diag :: dg
+    let ok_diag = node.pos, 4, "OK", json_of_goal () in
+    st, ok_diag :: dg
   | Error (_loc, msg) ->
-    st, (node.pos, 1, msg) :: dg
+    st, (node.pos, 1, msg, `Null) :: dg
 
 let new_doc modname = Pure.initial_state modname
 
@@ -65,10 +73,10 @@ let check_text ~doc file version contents =
     let open Pure in
     let doc_spans = parse_text contents in
     let _st, diag = List.fold_left (process_cmd file) (doc,[]) doc_spans in
-    LSP.mk_diagnostics file version @@ List.fold_left (fun acc (pos,lvl,msg) ->
+    LSP.mk_diagnostics file version @@ List.fold_left (fun acc (pos,lvl,msg,goal) ->
         match pos with
         | None     -> acc
-        | Some pos -> (pos,lvl,msg) :: acc
+        | Some pos -> (pos,lvl,msg,goal) :: acc
       ) [] diag
   with
   | Earley.Parse_error(buf,pos) ->
