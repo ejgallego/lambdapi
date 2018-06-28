@@ -12,6 +12,7 @@ depends: [
   "jbuilder"     { build }
   "lambdapi"     # { = version }
   "yojson"
+  "cmdliner"
 ]
 
 build: [ [ "jbuilder" "build" "-p" name "-j" jobs ] ]
