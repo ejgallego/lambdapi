@@ -31,23 +31,32 @@ module LSP = Lsp_base
 
 (* Request Handling: The client expects a reply *)
 let do_initialize ofmt ~id _params =
-  let msg = LSP.mk_reply ~id ["capabilities", `Assoc ["textDocumentSync", `Int 1]] in
+  let msg = LSP.mk_reply ~id ~result:(
+      `Assoc ["capabilities",
+       `Assoc [
+          "textDocumentSync", `Int 1
+        ; "documentSymbolProvider", `Bool true
+        ; "codeActionProvider", `Bool false
+        ]]) in
   LIO.send_json ofmt msg
 
 let do_shutdown ofmt ~id =
-  let msg = LSP.mk_reply ~id [] in
+  let msg = LSP.mk_reply ~id ~result:`Null in
   LIO.send_json ofmt msg
+
+let doc_table : (string, Pure.state) Hashtbl.t = Hashtbl.create 39
+let completed_table : (string, Pure.state) Hashtbl.t = Hashtbl.create 39
 
 (* Notificatio handling; reply is optional / asynchronous *)
 let do_check_text ofmt ~doc file version text =
-  LIO.send_json ofmt @@ Lp_doc.check_text ~doc file version text
+  let final_st, diags = Lp_doc.check_text ~doc file version text in
+  Hashtbl.replace completed_table file final_st;
+  LIO.send_json ofmt @@ diags
 
 let do_change ofmt ~doc file version change =
   LIO.log_error "checking file" (file ^ " / version: " ^ (string_of_int version));
   let text = string_field "text" change in
   do_check_text ofmt ~doc file version text
-
-let doc_table : (string, Pure.state) Hashtbl.t = Hashtbl.create 39
 
 let do_open ofmt params =
   let document = dict_field "textDocument" params in
@@ -75,6 +84,30 @@ let do_close _ofmt params =
   let doc_file = LSP.parse_uri @@ string_field "uri" document in
   Hashtbl.remove doc_table doc_file
 
+let grab_doc params =
+  let document = dict_field "textDocument" params in
+  let doc_file = LSP.parse_uri @@ string_field "uri" document in
+  let start_doc, end_doc = Hashtbl.(find doc_table doc_file, find completed_table doc_file) in
+  doc_file, start_doc, end_doc
+
+let mk_syminfo file (name, _path, pos) : J.json =
+  `Assoc [
+    "name", `String name;
+    "kind", `Int 12;            (* function *)
+    "location", `Assoc [
+                    "uri", `String ("file://"^file)
+                  ; "range", LSP.mk_range pos
+                  ]
+  ]
+
+let do_symbols ofmt ~id params =
+  let file, _, final_st = grab_doc params in
+  let sym = Pure.in_state final_st (fun () -> !(Sign.(current_sign ()).symbols)) () in
+  let sym = Extra.StrMap.fold (fun _ (s,p) l ->
+      option_cata (fun p -> mk_syminfo file (s.Terms.sym_name, s.sym_path, p) :: l) p l) sym [] in
+  let msg = LSP.mk_reply ~id ~result:(`List sym) in
+  LIO.send_json ofmt msg
+
 (* XXX: We could split requests and notifications but with the OCaml
    theading model there is not a lot of difference yet; something to
    think for the future. *)
@@ -87,6 +120,10 @@ let dispatch_message ofmt dict =
     do_initialize ofmt ~id params
   | "shutdown" ->
     do_shutdown ofmt ~id
+
+  (* Symbols in the document *)
+  | "textDocument/documentSymbol" ->
+    do_symbols ofmt ~id params
 
   (* Notifications *)
   | "textDocument/didOpen" ->
