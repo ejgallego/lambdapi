@@ -22,11 +22,10 @@ let parse_uri str =
   let l = String.length str - 7 in
   String.(sub str 7 l)
 
-let mk_reply ~id r = `Assoc [ "jsonrpc", `String "2.0"; "id",     `Int id;   "result", `Assoc r ]
+let mk_reply ~id r = `Assoc [ "jsonrpc", `String "2.0"; "id",     `Int id;   "result", r ]
 let mk_event m p   = `Assoc [ "jsonrpc", `String "2.0"; "method", `String m; "params", `Assoc p ]
 
 let json_of_goal g =
-  let open Yojson.Basic in
   let pr_hyp (s,(_,t)) =
     `Assoc ["hname", `String s;
             "htype", `String (Format.asprintf "%a" Print.pp_term (Bindlib.unbox t))] in
@@ -42,13 +41,14 @@ let json_of_thm thm =
   | Some thm ->
     json_of_goal thm.t_focus
 
-let mk_diagnostic ((p : Pos.pos), (lvl : int), (msg : string), (thm : Proofs.theorem option)) : J.json =
+let mk_location (p : Pos.pos) : J.json =
   let open Pos in
+  `Assoc ["start", `Assoc ["line", `Int Input.(line_num p.start_buf - 1); "character", `Int Input.(line_offset p.start_buf)];
+          "end",   `Assoc ["line", `Int Input.(line_num p.end_buf - 1);   "character", `Int Input.(line_offset p.end_buf)]]
+
+let mk_diagnostic ((p : Pos.pos), (lvl : int), (msg : string), (thm : Proofs.theorem option)) : J.json =
   let goal = json_of_thm thm in
-  let range =
-    `Assoc ["start", `Assoc ["line", `Int Input.(line_num p.start_buf - 1); "character", `Int Input.(line_offset p.start_buf)];
-            "end",   `Assoc ["line", `Int Input.(line_num p.end_buf - 1);   "character", `Int Input.(line_offset p.end_buf)]]
-  in
+  let range = mk_location p in
   `Assoc (mk_extra ["goal_fg", goal] @
           ["range", range;
            "severity", `Int lvl;

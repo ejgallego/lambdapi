@@ -1,3 +1,7 @@
+0.0.8
+-----
+- Preliminary support for `documentSymbol` request.
+
 0.0.7.2
 -----
 - Support for emacs' [eglot](https://github.com/joaotavora/eglot).

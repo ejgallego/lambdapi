@@ -56,7 +56,6 @@ let close_doc _modname = ()
 
 let check_text ~doc file version contents =
   try
-    let open Pure in
     let doc_spans = parse_text contents in
     let _st, diag = List.fold_left (process_cmd file) (doc,[]) doc_spans in
     LSP.mk_diagnostics file version @@ List.fold_left (fun acc (pos,lvl,msg,goal) ->

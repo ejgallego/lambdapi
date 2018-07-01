@@ -31,11 +31,17 @@ module LSP = Lsp_base
 
 (* Request Handling: The client expects a reply *)
 let do_initialize ofmt ~id _params =
-  let msg = LSP.mk_reply ~id ["capabilities", `Assoc ["textDocumentSync", `Int 1]] in
+  let msg = LSP.mk_reply ~id (
+      `Assoc ["capabilities",
+       `Assoc [
+          "textDocumentSync", `Int 1
+        ; "documentSymbolProvider", `Bool true
+        ; "codeActionProvider", `Bool false
+        ]]) in
   LIO.send_json ofmt msg
 
 let do_shutdown ofmt ~id =
-  let msg = LSP.mk_reply ~id [] in
+  let msg = LSP.mk_reply ~id `Null in
   LIO.send_json ofmt msg
 
 (* Notificatio handling; reply is optional / asynchronous *)
@@ -75,6 +81,27 @@ let do_close _ofmt params =
   let doc_file = LSP.parse_uri @@ string_field "uri" document in
   Hashtbl.remove doc_table doc_file
 
+let grab_doc params =
+  let document = dict_field "textDocument" params in
+  let doc_file = LSP.parse_uri @@ string_field "uri" document in
+  let doc = Hashtbl.find doc_table doc_file in
+  doc
+
+let mk_syminfo (name, _path, pos) : J.json =
+  `Assoc [
+    "name", `String name;
+    "kind", `Int 12;
+    "location", LSP.mk_location pos
+  ]
+
+let do_symbols ofmt ~id params =
+  let doc = grab_doc params in
+  let sym = Pure.in_state doc (fun () -> !(Sign.(current_sign ()).symbols)) () in
+  let sym = Extra.StrMap.fold (fun _ (s,p) l ->
+      option_cata (fun p -> mk_syminfo (s.Terms.sym_name, s.sym_path, p) :: l) p l) sym [] in
+  let msg = LSP.mk_reply ~id (`List sym) in
+  LIO.send_json ofmt msg
+
 (* XXX: We could split requests and notifications but with the OCaml
    theading model there is not a lot of difference yet; something to
    think for the future. *)
@@ -87,6 +114,10 @@ let dispatch_message ofmt dict =
     do_initialize ofmt ~id params
   | "shutdown" ->
     do_shutdown ofmt ~id
+
+  (* Symbols in the document *)
+  | "textDocument/documentSymbol" ->
+    do_symbols ofmt ~id params
 
   (* Notifications *)
   | "textDocument/didOpen" ->
