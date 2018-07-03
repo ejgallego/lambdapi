@@ -1,3 +1,7 @@
+0.0.8.1
+-----
+- Rebase against new `pureinterface` branch.
+
 0.0.8
 -----
 - Preliminary support for `documentSymbol` request.
