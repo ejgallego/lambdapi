@@ -1,3 +1,7 @@
+0.0.8.2
+-----
+- Fix location info for new LP API.
+
 0.0.8.1
 -----
 - Rebase against new `pureinterface` branch.
