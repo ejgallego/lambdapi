@@ -6,7 +6,7 @@ authors: [
 homepage: "https://github.com/rlepigre/lambdapi"
 maintainer: "dedukti-dev@inria.fr"
 bug-reports: "https://github.com/rlepigre/lambdapi/issues"
-dev-repo: "https://github.com/rlepigre/lambdapi.git"
+dev-repo: "https://github.com/ejgallego/lambdapi.git"
 doc: "https://rleprigre.github.io/lambdapi/doc"
 license: "CeCILL"
 
