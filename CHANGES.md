@@ -1,3 +1,8 @@
+0.0.8.8
+-------
+- [opam] Correct Dune call in opam files.
+
+
 0.0.8.7
 -------
 - [lambdapi] Rebase against 98fbf803959579dcb1e41989a33797aef10fac9b
